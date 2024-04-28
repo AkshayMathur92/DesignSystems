@@ -16,11 +16,14 @@ import java.util.concurrent.ConcurrentHashMap;
  * | username | varchar(256) | NO | PRI | NULL | |
  * | counter | int | YES | | NULL | |
  * +----------+--------------+------+-----+---------+-------+
+ * There are {@code CONCURRENY_THREADS} number of concurrent calls to update the same row.
+ * Changing {@code READ_COUNTER_FOR_USER} query will effect the output of the final state of the row.
+ * UPDATE READ_COUNTER_FOR_USER query to see different results.
  */
 public class ConcurrentWrites {
     private static final String USERNAME = "akshay";
     private static final String READ_USER = "SELECT * FROM ConcurrentWrites WHERE username = ?";
-    // TRY REMOVING FOR UPDATE FROM THIS QUERY AND RUN THE DEMO AGAIN
+    // TRY REMOVING FOR UPDATE or Replace with FOR SHARED FROM THIS QUERY AND RUN THE DEMO AGAIN
     private static final String READ_COUNTER_FOR_USER = "Select counter From ConcurrentWrites WHERE username = ? FOR UPDATE";
     private static final String UPDATE_COUNTER_FOR_USER = "UPDATE ConcurrentWrites SET counter = ? WHERE username = ?";
     private static final String UPSERT_USER = "INSERT INTO ConcurrentWrites(username, counter) VALUES(?, ?) ON DUPLICATE KEY UPDATE counter=VALUES(counter)";
