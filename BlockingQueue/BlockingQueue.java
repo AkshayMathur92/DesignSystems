@@ -73,13 +73,11 @@ public final class BlockingQueue {
     }
 
     public boolean isEmpty() {
-        // TODO Auto-generated method stub
-        return false;
+        return size == 0;
     }
 
     public int size() {
-        // TODO Auto-generated method stub
-        return 0;
+        return size;
     }
 
     static class Producer implements Runnable {
