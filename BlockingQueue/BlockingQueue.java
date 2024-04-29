@@ -1,5 +1,7 @@
+import java.time.Duration;
+import java.time.Instant;
 import java.util.Arrays;
-import java.util.Random;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.Lock;
@@ -7,40 +9,36 @@ import java.util.concurrent.locks.ReentrantLock;
 
 public final class BlockingQueue {
 
-    private final static int MAX_WAIT_MILIS = 1000;
-    private final static int CAPACITY = 5;
-    private final transient int[] arr;
-    private transient int head;
-    private transient int tail;
-    private transient int size;
-    private Lock producerLock;
+    private final static int TOTAL_MESSAGES = 1000;
+    private final static int CAPACITY = 10;
+    private final int[] arr;
+    private volatile int head;
+    private volatile int tail;
+    private volatile int size;
     private Condition full;
-    private Lock consumerLock;
     private Condition empty;
     private Lock globalLock;
 
     public BlockingQueue() {
         arr = new int[CAPACITY];
-        producerLock = new ReentrantLock();
-        consumerLock = new ReentrantLock();
         head = -1;
         tail = -1;
         size = 0;
-        globalLock = new ReentrantLock();
+        globalLock = new ReentrantLock(true);
         full = globalLock.newCondition();
         empty = globalLock.newCondition();
     }
 
     public boolean add(Integer e) throws InterruptedException {
-        globalLock.lock();
         try {
+            globalLock.lock();
             while (size == CAPACITY) {
                 System.out.println("Queue is full. Producers should wait");
-                full.await();
+                full.await(100, TimeUnit.MILLISECONDS);
             }
             addElement(e);
             empty.signalAll();
-            return false;
+            return true;
         } finally {
             globalLock.unlock();
         }
@@ -53,11 +51,11 @@ public final class BlockingQueue {
     }
 
     public Integer poll() throws InterruptedException {
-        globalLock.lock();
         try {
+            globalLock.lock();
             while (size == 0) {
                 System.out.println("Queue is empty. Consumers should wait");
-                empty.await();
+                empty.await(100, TimeUnit.MILLISECONDS);
             }
             int result = removeElement();
             full.signalAll();
@@ -87,23 +85,20 @@ public final class BlockingQueue {
     static class Producer implements Runnable {
 
         private BlockingQueue q;
-        private long id;
-        private Random rng;
+        private static AtomicInteger produced = new AtomicInteger(0);
 
         Producer(BlockingQueue q) {
             this.q = q;
-            this.id = Thread.currentThread().getId();
-            rng = new Random();
         }
 
         public void run() {
-            while (true) {
-                int random = rng.nextInt(MAX_WAIT_MILIS);
+            while (produced.getAndIncrement() < TOTAL_MESSAGES) {
                 try {
-                    q.add(random);
-                    System.out.println("Producer id:" + id + " produced " + random);
+                    q.add(produced.get());
+                    System.out.println(Instant.now().toEpochMilli() + ",PID:" + Thread.currentThread().getId() + ",+"
+                            + produced);
                 } catch (InterruptedException e) {
-                    System.err.println("Producer id:" + id + "interrupted.");
+                    System.err.println("PID:" + Thread.currentThread().getId() + "interrupted.");
                     Thread.interrupted();
                 }
             }
@@ -113,20 +108,22 @@ public final class BlockingQueue {
     static class Consumer implements Runnable {
 
         private BlockingQueue q;
-        private long id;
+        private static AtomicInteger consumed = new AtomicInteger(0);
 
         Consumer(BlockingQueue q) {
             this.q = q;
-            this.id = Thread.currentThread().getId();
         }
 
         public void run() {
-            while (true) {
+            while (consumed.getAndIncrement() < TOTAL_MESSAGES) {
                 try {
                     Integer i = q.poll();
-                    System.out.println("Consumer id:" + id + " consumed " + i);
+                    System.out.println(
+                            Instant.now().toEpochMilli() + ",CID:" + Thread.currentThread().getId() + ",(" + i + ")");
+                    if (i == 100)
+                        break;
                 } catch (InterruptedException e) {
-                    System.err.println("Consuner id: " + id + "interrupted.");
+                    System.err.println("CID: " + Thread.currentThread().getId() + "interrupted.");
                     Thread.interrupted();
                 }
             }
@@ -135,23 +132,31 @@ public final class BlockingQueue {
 
     public static void runDemo() throws InterruptedException {
         BlockingQueue Q = new BlockingQueue();
-
         int numberOfProducers = 2;
-        int numberOfConsumers = 1;
+        int numberOfConsumers = 2;
         Thread[] producers = new Thread[numberOfProducers];
         Thread[] consumers = new Thread[numberOfConsumers];
 
         for (int i = 0; i < numberOfProducers; i++) {
             producers[i] = new Thread(new Producer(Q));
-            producers[i].join();
-
         }
         for (int i = 0; i < numberOfConsumers; i++) {
             consumers[i] = new Thread(new Consumer(Q));
+        }
+        Instant start = Instant.now();
+        Arrays.stream(producers).parallel().forEach(Thread::start);
+        Arrays.stream(consumers).parallel().forEach(Thread::start);
+        for (int i = 0; i < numberOfProducers; i++) {
+            producers[i].join();
+        }
+        for (int i = 0; i < numberOfConsumers; i++) {
             consumers[i].join();
         }
-        Arrays.stream(producers).forEach(Thread::start);
-        Arrays.stream(consumers).forEach(Thread::start);
+        Instant end = Instant.now();
+        int totalMessages = numberOfProducers * TOTAL_MESSAGES;
+        long totalMiliseconds = Duration.between(start, end).toMillis();
+        float messagePerSecond = (float) totalMessages / totalMiliseconds;
+        System.out.println("Message Per Millisecond = " + messagePerSecond);
     }
 
     public static void main(String... s) throws InterruptedException {
