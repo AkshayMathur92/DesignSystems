@@ -1,4 +1,6 @@
 .classpath
+bin
+lib
 .project
 .vscode
 .settings/
