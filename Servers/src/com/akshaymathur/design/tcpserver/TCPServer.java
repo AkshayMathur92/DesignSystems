@@ -33,22 +33,22 @@ public final class TCPServer {
                     var outputStream = new DataOutputStream(client.getOutputStream());) {
                 System.out.println("Connection Established with client :" + client.getInetAddress());
                 String input = inputStream.readLine();
-                String methodName = parseInput(input);
-                String output = server.callMethodWithName(methodName);
+                String output = "null";
+                try {
+                    output = server.callMethod(input);
+                } catch (RuntimeException e) {
+                    System.out.println("A runtime exception occured while calling the function. ");
+                    System.err.println(e);
+                }
                 outputStream.writeUTF(output);
                 outputStream.flush();
             } catch (IOException e) {
                 System.out.println("ERROR OCCURED");
-                System.out.println(e);
+                System.err.println(e);
                 return;
             }
             System.out.println("connection closed with client!");
         }
-
-        private String parseInput(String input) {
-            return input.substring(7);
-        }
-
     }
 
     public void start() {

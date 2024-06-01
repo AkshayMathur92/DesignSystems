@@ -21,7 +21,7 @@ public class MyService {
     }
 
     @Servable
-    public String sum(int a, int b) {
+    public String sum(Integer a, Integer b) {
         return Integer.valueOf(a + b).toString();
     }
 

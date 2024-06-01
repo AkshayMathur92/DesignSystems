@@ -1,5 +1,5 @@
 package com.akshaymathur.design.tcpserver;
 
 public interface Server {
-    String callMethodWithName(String methodName);
+    String callMethod(String methodName);
 }

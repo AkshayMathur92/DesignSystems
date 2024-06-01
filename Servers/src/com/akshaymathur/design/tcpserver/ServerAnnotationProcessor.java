@@ -54,6 +54,7 @@ public class ServerAnnotationProcessor extends AbstractProcessor {
                         out.println(constructMethod(e));
                     }
                     out.println(constructServerMethod());
+                    out.println(constructUtilityMethod());
                     out.println(constructMainMethod(generatedClassName));
                     // end of class
                     out.println("}");
@@ -77,6 +78,7 @@ public class ServerAnnotationProcessor extends AbstractProcessor {
         // imports
                 + "import java.lang.reflect.*;"
                 + "import java.util.*; "
+                + "import java.util.regex.*;"
                 + "import com.akshaymathur.design.tcpserver.*; "
                 // class begins
                 + "public final class " + generatedClassName + " extends " + hostClassName + " implements Server"
@@ -103,25 +105,69 @@ public class ServerAnnotationProcessor extends AbstractProcessor {
 
     private String constructServerMethod() {
         return """
-                public String callMethodWithName(String name){
-                    Method[] allMethods = this.getClass().getSuperclass().getDeclaredMethods();
-                    Optional<Method> foundMethod = Arrays.stream(allMethods, 0, allMethods.length)
-                        .filter(m -> m.getName().toLowerCase().equals(name.toLowerCase()))
-                        .limit(1).findFirst();
-                    if (foundMethod.isEmpty()) {
-                        System.out.println("Unable to find the method");
-                    } else {
-                        System.out.println("calling method " + name);
+                public String callMethod(String input) {
+                     String regex = "(\\\\S+)";
+                     final Pattern pattern = Pattern.compile(regex);
+                     final Matcher matcher = pattern.matcher(input);
+                     if (matcher.find()) {
+                         String name = matcher.group(0);
+                         Method[] allMethods = this.getClass().getSuperclass().getDeclaredMethods();
+                         Optional<Method> foundMethod = Arrays.stream(allMethods, 0, allMethods.length)
+                                 .filter(m -> m.getName().toLowerCase().equals(name.toLowerCase()))
+                                 .limit(1).findFirst();
+                         if (foundMethod.isEmpty()) {
+                             return "method not found !";
+                         }else{
+                            System.out.println("Method found");
+                         }
+                         String[] remainingParams = removeEmptyStrings(input.substring(name.length()).split("(?U)\\\\s+"));
+                         for(String token : remainingParams) {
+                            System.out.println("token : " + token);
+                         }
+                         Class<?>[] types = foundMethod.get().getParameterTypes();
+                         Object[] params = new Object[remainingParams.length];
+                         for (int i = 0; i < remainingParams.length; i++) {
+                             if (types[i].equals(String.class)) {
+                                 params[i] = new String(remainingParams[i]);
+                             } else if (types[i].equals(Integer.class)) {
+                                 params[i] = Integer.parseInt(remainingParams[i]);
+                             } else {
+                                System.out.println("Expected type " + types[i]);
+                                 return "INVALID type in params!";
+                             }
+                         }
+                         try {
+                             return (String) foundMethod.get().invoke(this, params);
+                         } catch (IllegalAccessException | InvocationTargetException e) {
+                             System.out.println("ERROR OCCURED");
+                             System.out.println(e);
+                         }
+                     } else {
+                         return "INVALID Input, follow pattern,  method param1 param2 ...";
+                     }
+                     return "null";
+                }""";
+    }
+
+    private String constructUtilityMethod() {
+        return """
+                // Method to remove empty strings from an array
+                public static String[] removeEmptyStrings(String[] arr) {
+                    int count = 0;
+                    for (String str : arr) {
+                        if (!str.trim().isEmpty()) {
+                            count++;
+                        }
                     }
-                    try{
-                        return (String) foundMethod.get().invoke(this);
-                    }catch (IllegalAccessException| InvocationTargetException e) {
-                        System.out.println("ERROR OCCURED");
-                        System.out.println(e);
+                    String[] result = new String[count];
+                    int index = 0;
+                    for (String str : arr) {
+                        if (!str.trim().isEmpty()) {
+                            result[index++] = str.trim();
+                        }
                     }
-                    return "null";
-                }
-                """;
+                    return result;
+                }""";
     }
 
     private String constructMainMethod(String className) {
